@@ -1,7 +1,21 @@
+function parseDate(dateString, timeString) {
+  if (dateString instanceof Date) {
+    dateString = Utilities.formatDate(dateString, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  if (timeString) {
+    var dateTimeString = `${dateString}T${timeString}`;
+    var parsedDate = new Date(dateTimeString);
+    return isNaN(parsedDate.getTime()) ? new Date(dateString) : parsedDate;
+  } else {
+    return new Date(dateString);
+  }
+}
+
 function syncSheetToCalendar() {
   try {
     var sheetName = 'Fall 2024';  
-    var calendarId = 'your-calendar@group.calendar.google.com'; // Change this to your calendar ID
+    var calendarId = 'your-calendar@group.calendar.google.com'; 
 
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
     if (!sheet) {
@@ -15,16 +29,13 @@ function syncSheetToCalendar() {
       return;
     }
 
-    // gather all data from the sheet
-    var lastRow = sheet.getLastRow(); // finds the last row that has content
-    var dataRange = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());// sets the range to (row 2, col 1; last row, last column)
+    var lastRow = sheet.getLastRow();
+    var dataRange = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
     var data = dataRange.getValues();
-    var idRange = sheet.getRange(2, 8, lastRow - 1, 1); // Column H for Event ID
+    var idRange = sheet.getRange(2, 8, lastRow - 1, 1);
     var ids = idRange.getValues();
 
-    // Loop through each row 
     for (var i = 0; i < data.length; i++) {
-      // Gather row Data
       var row = data[i];
       var eventTitle = row[0];
       var eventStartDate = row[1];
@@ -35,21 +46,21 @@ function syncSheetToCalendar() {
       var eventLocation = row[6];
       var eventId = ids[i][0];
 
-      Logger.log("Processing row " + (i + 2) + ": " + eventTitle + ", " + eventStartDate + ", " + eventStartTime + ", " + eventEndTime);
+      Logger.log("Processing row " + (i + 2) + ": " + eventTitle + ", " + eventStartDate + ", " + eventStartTime + ", " + eventEndDate + ", " + eventEndTime);
 
       var startDateTime, endDateTime;
 
       if (eventStartTime && eventEndTime) {
-        var startDateTimeStr = Utilities.formatDate(new Date(eventStartDate + 'T' + eventStartTime), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss'Z'");
-        var endDateTimeStr = Utilities.formatDate(new Date(eventEndDate + 'T' + eventEndTime), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss'Z'");
-        startDateTime = new Date(startDateTimeStr);
-        endDateTime = new Date(endDateTimeStr);
+        startDateTime = parseDate(eventStartDate, eventStartTime);
+        endDateTime = parseDate(eventEndDate, eventEndTime);
       } else {
-        // Create all-day event
         startDateTime = new Date(eventStartDate);
         endDateTime = new Date(eventEndDate);
         endDateTime.setDate(endDateTime.getDate() + 1); // End date needs to be the next day for all-day events
       }
+
+      Logger.log("Parsed startDateTime: " + startDateTime);
+      Logger.log("Parsed endDateTime: " + endDateTime);
 
       if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
         Logger.log("Invalid date/time: " + startDateTime + " or " + endDateTime);
@@ -82,7 +93,7 @@ function syncSheetToCalendar() {
             location: eventLocation
           });
         } else {
-          event = calendar.createAllDayEvent(eventTitle, startDateTime, endDateTime, {
+          event = calendar.createAllDayEvent(eventTitle, startDateTime, {
             description: eventDescription,
             location: eventLocation
           });
@@ -92,7 +103,7 @@ function syncSheetToCalendar() {
       }
     }
 
-    idRange.setValues(ids); // Update the Event ID column in the sheet
+    idRange.setValues(ids);
   } catch (e) {
     Logger.log("Error: " + e.message);
   }
@@ -101,7 +112,7 @@ function syncSheetToCalendar() {
 function syncCalendarToSheet() {
   try {
     var sheetName = 'Fall 2024';  
-    var calendarId = 'your-calendar@group.calendar.google.com'; // Change this to your calendar ID
+    var calendarId = 'your-calendar@group.calendar.google.com'; 
 
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
     if (!sheet) {
@@ -115,9 +126,9 @@ function syncCalendarToSheet() {
       return;
     }
 
-    var events = calendar.getEvents(new Date('January 1, 2020'), new Date('December 31, 2024')); // Adjust the date range accordingly
+    var events = calendar.getEvents(new Date('January 1, 2020'), new Date('December 31, 2024'));
     var data = [];
-    
+
     for (var i = 0; i < events.length; i++) {
       var event = events[i];
       var startTime = event.getStartTime();
@@ -126,68 +137,22 @@ function syncCalendarToSheet() {
       var eventTitle = event.getTitle();
       var eventDescription = event.getDescription();
       var eventLocation = event.getLocation();
-      
-      // Combine date and time strings
+
       var eventStartDate = Utilities.formatDate(startTime, Session.getScriptTimeZone(), "yyyy-MM-dd");
       var eventEndDate = Utilities.formatDate(endTime, Session.getScriptTimeZone(), "yyyy-MM-dd");
       var startTimeStr = Utilities.formatDate(startTime, Session.getScriptTimeZone(), "HH:mm:ss");
       var endTimeStr = Utilities.formatDate(endTime, Session.getScriptTimeZone(), "HH:mm:ss");
-      
+
       data.push([eventTitle, eventStartDate, eventEndDate, startTimeStr, endTimeStr, eventDescription, eventLocation, eventId]);
     }
-    
-    // Clear existing data (excluding headers)
+
     sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
-    
-    // Write new data to the sheet
+
     if (data.length > 0) {
       sheet.getRange(2, 1, data.length, data[0].length).setValues(data);
     }
 
     Logger.log("Sheet updated from calendar.");
-  } catch (e) {
-    Logger.log("Error: " + e.message);
-  }
-}
-
-function removeDeletedCalendarEventsFromSheet() {
-  try {
-    var sheetName = 'Fall 2024';  
-    var calendarId = 'your-calendar@group.calendar.google.com'; // Change this to your calendar ID
-
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-    if (!sheet) {
-      Logger.log("Sheet not found");
-      return;
-    }
-
-    var calendar = CalendarApp.getCalendarById(calendarId);
-    if (!calendar) {
-      Logger.log("Calendar not found");
-      return;
-    }
-
-    var lastRow = sheet.getLastRow();
-    var dataRange = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
-    var data = dataRange.getValues();
-    var idRange = sheet.getRange(2, 8, lastRow - 1, 1); // Column H for Event ID
-    var ids = idRange.getValues();
-
-    var calendarEventIds = calendar.getEvents(new Date('January 1, 2020'), new Date('December 31, 2024'))
-      .map(event => event.getId());
-
-    var rowsToDelete = [];
-    for (var i = 0; i < ids.length; i++) {
-      var eventId = ids[i][0];
-      if (eventId && !calendarEventIds.includes(eventId)) {
-        rowsToDelete.push(i + 2); // Adjust for header row
-      }
-    }
-
-    // Delete rows from bottom to top to avoid index shift issues
-    rowsToDelete.reverse().forEach(row => sheet.deleteRow(row));
-
-    Logger.log("Deleted events that no longer exist in calendar.");
   } catch (e) {
     Logger.log("Error: " + e.message);
   }
@@ -212,55 +177,9 @@ function deleteAllCalendarEvents() {
   }
 }
 
-function deleteCalendarEventsNotInSheet() {
-  try {
-    var sheetName = 'Fall 2024';  
-    var calendarId = 'your-calendar@group.calendar.google.com'; // Change this to your calendar ID
-
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-    if (!sheet) {
-      Logger.log("Sheet not found");
-      return;
-    }
-
-    var calendar = CalendarApp.getCalendarById(calendarId);
-    if (!calendar) {
-      Logger.log("Calendar not found");
-      return;
-    }
-
-    var lastRow = sheet.getLastRow();
-    var dataRange = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
-    var data = dataRange.getValues();
-    var idRange = sheet.getRange(2, 8, lastRow - 1, 1); // Column H for Event ID
-    var sheetEventIds = idRange.getValues().flat();
-
-    var calendarEvents = calendar.getEvents(new Date('January 1, 2020'), new Date('December 31, 2024'));
-    var calendarEventIds = calendarEvents.map(event => event.getId());
-
-    // Find events in calendar not in the sheet
-    var eventsToDelete = calendarEventIds.filter(eventId => !sheetEventIds.includes(eventId));
-
-    eventsToDelete.forEach(eventId => {
-      try {
-        var event = calendar.getEventById(eventId);
-        event.deleteEvent();
-        Logger.log("Event deleted: " + eventId);
-      } catch (e) {
-        Logger.log("Failed to delete event with ID: " + eventId + " - " + e.message);
-      }
-    });
-
-    Logger.log("Deleted events that are no longer present in the sheet.");
-  } catch (e) {
-    Logger.log("Error: " + e.message);
-  }
-}
-
 // Run Manually to sync Calendar and Sheet
 function manualFullSync() {
-  removeDeletedEventsFromSheet();
-  deleteEventsNotInSheet();
-  updateSheetFromCalendar();
-  createOrUpdateCalendarEvent();
+  syncCalendarToSheet();
+  syncSheetToCalendar();
 }
+
