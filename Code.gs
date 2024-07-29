@@ -1,21 +1,33 @@
 function parseDate(dateString, timeString) {
+  Logger.log("Original dateString: " + dateString + ", timeString: " + timeString);
+
   if (dateString instanceof Date) {
     dateString = Utilities.formatDate(dateString, Session.getScriptTimeZone(), "yyyy-MM-dd");
   }
 
+  Logger.log("Formatted dateString: " + dateString);
+
   if (timeString) {
+    // Ensure timeString is a string in "HH:mm:ss" format
+    if (timeString instanceof Date) {
+      timeString = Utilities.formatDate(timeString, Session.getScriptTimeZone(), "HH:mm:ss");
+    }
     var dateTimeString = `${dateString}T${timeString}`;
+    //ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTHH:MM:SS±HH:MM`
     var parsedDate = new Date(dateTimeString);
+    Logger.log("Parsed dateTimeString: " + dateTimeString + ", Parsed Date: " + parsedDate);
     return isNaN(parsedDate.getTime()) ? new Date(dateString) : parsedDate;
   } else {
-    return new Date(dateString);
+    var parsedDate = new Date(dateString);
+    Logger.log("Parsed Date: " + parsedDate);
+    return parsedDate;
   }
 }
 
 function syncSheetToCalendar() {
   try {
     var sheetName = 'Fall 2024';  
-    var calendarId = 'your-calendar@group.calendar.google.com'; 
+    var calendarId = 'c77d39b85831a771d41e2ffc594f67263ab7c2d0a76369e3b4d9c77fabc98ad4@group.calendar.google.com'; 
 
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
     if (!sheet) {
@@ -40,8 +52,8 @@ function syncSheetToCalendar() {
       var eventTitle = row[0];
       var eventStartDate = row[1];
       var eventEndDate = row[2];
-      var eventStartTime = row[3];
-      var eventEndTime = row[4];
+      var eventStartTime = row[3] ? Utilities.formatDate(new Date(row[3]), Session.getScriptTimeZone(), "HH:mm:ss") : null;
+      var eventEndTime = row[4] ? Utilities.formatDate(new Date(row[4]), Session.getScriptTimeZone(), "HH:mm:ss") : null;
       var eventDescription = row[5];
       var eventLocation = row[6];
       var eventId = ids[i][0];
